@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مذاكرتي</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fffaf5;--surface:#ffffff;--ink:#3b3446;--mute:#8a8196;--pink:#fde4ec;--blue:#e3f0fb;--lav:#ece6fb;--beige:#f6ecdf;--line:#eadfe9;--acc:#9a7fd1;--ok:#6fb58f;--late:#d9728f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f1b27;--surface:#2a2535;--ink:#f1ecf7;--mute:#a79fb5;--pink:#4a2e3b;--blue:#27384a;--lav:#3a3256;--beige:#40362c;--line:#3d3650;--acc:#b9a1ec}}
+:root[data-theme="dark"]{--bg:#1f1b27;--surface:#2a2535;--ink:#f1ecf7;--mute:#a79fb5;--pink:#4a2e3b;--blue:#27384a;--lav:#3a3256;--beige:#40362c;--line:#3d3650;--acc:#b9a1ec}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Readex Pro',Tahoma,sans-serif;line-height:1.7}
+header{padding:20px 16px 8px;max-width:760px;margin:auto}
+h1{margin:0;font-size:1.5rem;font-weight:600}
+.sub{color:var(--mute);font-size:.9rem}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 16px;max-width:760px;margin:auto;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+nav button{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:20px;font:inherit;font-size:.88rem;cursor:pointer}
+nav button.on{background:var(--lav);border-color:var(--acc);font-weight:600}
+main{max-width:760px;margin:auto;padding:8px 16px 40px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+input[type=text],textarea{flex:1 1 160px}
+textarea{width:100%;min-height:70px}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:8px 16px;font:inherit;cursor:pointer}
+.btn.soft{background:var(--blue);color:var(--ink)}
+.tag{display:inline-block;background:var(--pink);border-radius:12px;padding:0 10px;font-size:.78rem;margin-inline-end:4px}
+.t-high{background:var(--pink)}.t-mid{background:var(--beige)}.t-low{background:var(--blue)}
+.done{opacity:.55;text-decoration:line-through}
+.late{color:var(--late);font-weight:600}
+.bar{height:10px;background:var(--lav);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+h2{font-size:1.1rem;margin:16px 0 4px}
+.empty{color:var(--mute);text-align:center;padding:18px}
+.opt{display:block;width:100%;text-align:start;margin:6px 0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;cursor:pointer}
+.opt.right{background:#d9f0e3;color:#24543b}.opt.wrong{background:#fbdce5;color:#7a2b44}
+.note{background:var(--beige);border-radius:12px;padding:10px 12px;font-size:.85rem}
+.x{background:none;border:0;color:var(--mute);cursor:pointer;font-size:1.1rem}
+.sr{position:absolute;inset-inline-start:-9999px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><div class="row"><h1 style="flex:1">مذاكرتي 🌸</h1><button class="btn soft" id="out" onclick="logout()" hidden>خروج</button></div><div class="sub" id="today"></div></header>
+<div class="card" id="auth" hidden style="max-width:420px;margin:12px auto"><b>سجلي دخول علشان بياناتك تتحفظ</b><div class="row" style="margin-top:8px"><input type="text" id="em" placeholder="الإيميل" dir="ltr"><input type="password" id="pw" placeholder="الباسورد (6 حروف على الأقل)" dir="ltr" style="flex:1 1 160px"></div><div class="row" style="margin-top:8px"><button class="btn" onclick="auth(false)">دخول</button><button class="btn soft" onclick="auth(true)">حساب جديد</button></div><div class="late" id="am"></div></div>
+<div class="note" id="msg" hidden style="max-width:728px;margin:8px auto"></div>
+<nav id="nav"></nav>
+<main id="main"></main>
+
+<script>
+/* ===== Supabase ===== */
+const sb=supabase.createClient(window.CONFIG.url,window.CONFIG.key);
+const TBL={tasks:'tasks',study:'study_items',ideas:'ideas',qs:'questions'};
+let S={tasks:[],study:[],ideas:[],qs:[]},known={tasks:[],study:[],ideas:[],qs:[]},user=null;
+const SEED=[{q:'أي مما يلي خلاط دوّار (Tumbling mixer)؟',o:['V-blender','Ribbon blender','Planetary mixer'],a:0},{q:'أنسب خلاط للمواد نصف الصلبة والعجائن؟',o:['Double cone','Sigma blade mixer','V-blender'],a:1}];
+function msg(t){const e=$('#msg');e.textContent=t;e.hidden=!t}
+async function load(){
+  for(const k in TBL){
+    const {data,error}=await sb.from(TBL[k]).select('id,data').order('created_at');
+    if(error){msg('مشكلة في تحميل البيانات: '+error.message);continue}
+    S[k]=data.map(r=>({...r.data,id:r.id}));known[k]=S[k].map(x=>x.id);
+  }
+  if(!S.qs.length){S.qs=SEED.map(x=>({...x,id:crypto.randomUUID()}));await persist()}
+}
+async function persist(){
+  for(const k in TBL){
+    const rows=S[k].map(({id,...d})=>({id,user_id:user.id,data:d}));
+    if(rows.length){const {error}=await sb.from(TBL[k]).upsert(rows);if(error)msg('مشكلة في الحفظ: '+error.message)}
+    const gone=known[k].filter(i=>!S[k].some(x=>x.id===i));
+    if(gone.length)await sb.from(TBL[k]).delete().in('id',gone);
+    known[k]=S[k].map(x=>x.id);
+  }
+}
+async function auth(up){
+  const email=$('#em').value.trim(),password=$('#pw').value;
+  const r=up?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
+  if(r.error){$('#am').textContent=r.error.message;return}
+  if(up&&!r.data.session){$('#am').textContent='اتبعتلك إيميل تأكيد. افتحيه وبعدين سجلي دخول.';return}
+  boot();
+}
+async function logout(){await sb.auth.signOut();boot()}
+async function boot(){
+  const {data}=await sb.auth.getSession();user=data.session?data.session.user:null;
+  $('#auth').hidden=!!user;$('#out').hidden=!user;
+  if(!user){$('#main').innerHTML='';return}
+  await load();render();
+}
+/* ===== أدوات ===== */
+const $=s=>document.querySelector(s);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>crypto.randomUUID();
+const today=()=>new Date().toISOString().slice(0,10);
+const days=d=>d?Math.ceil((new Date(d)-new Date(today()))/864e5):null;
+const PR={high:'عالية',mid:'متوسطة',low:'منخفضة'};
+const ST={todo:'لسه',started:'بدأت',review:'محتاجة مراجعة',done:'خلصت'};
+let tab='day',q='',quizI=0,answered=false;
+$('#today').textContent=new Date().toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'});
+const TABS={day:'يومي',tasks:'المهام',study:'المذاكرة',ideas:'الأفكار',lec:'المحاضرات',quiz:'تدريب'};
+$('#nav').innerHTML=Object.entries(TABS).map(([k,v])=>`<button data-k="${k}" onclick="go('${k}')">${v}</button>`).join('');
+function go(k){tab=k;render()}
+function save(){persist();render()}
+/* ===== الشاشات ===== */
+function vDay(){
+  const items=[
+   ...S.tasks.filter(t=>!t.done).map(t=>({n:t.title,d:days(t.due),p:t.pr,kind:'مهمة'})),
+   ...S.study.filter(s=>s.st!=='done').map(s=>({n:s.name,d:null,p:s.diff>=3?'high':s.diff==2?'mid':'low',kind:'مذاكرة',bonus:s.st==='review'?1:0}))
+  ];
+  const sc=i=>(i.d!==null?(i.d<0?100:Math.max(0,30-i.d*4)):8)+({high:20,mid:10,low:0}[i.p]||0)+(i.bonus?8:0);
+  const top=items.sort((a,b)=>sc(b)-sc(a)).slice(0,3);
+  const tot=S.tasks.length,dn=S.tasks.filter(t=>t.done).length;
+  const near=S.tasks.filter(t=>!t.done&&t.due&&days(t.due)<=2);
+  return `<h2>أهم 3 أولويات النهاردة</h2>`+(top.length?top.map((i,k)=>`<div class="card"><b>${k+1}.</b> ${esc(i.n)} <span class="tag">${i.kind}</span>${i.d!==null?`<span class="${i.d<0?'late':'sub'}"> ${i.d<0?'متأخرة':i.d===0?'النهاردة':'باقي '+i.d+' يوم'}</span>`:''}</div>`).join(''):'<div class="empty">مفيش حاجة مستنياكي. ضيفي مهمة أو مادة تبدأي منها.</div>')+
+  `<h2>تقدمك</h2><div class="card"><div class="bar"><i style="width:${tot?dn/tot*100:0}%"></i></div><div class="sub">خلصتي ${dn} من ${tot} مهمة</div></div>`+
+  `<h2>مواعيدها قربت</h2>`+(near.length?near.map(t=>`<div class="card">${esc(t.title)} <span class="${days(t.due)<0?'late':''}">${t.due}</span></div>`).join(''):'<div class="empty">مفيش مواعيد قريبة.</div>');
+}
+function vTasks(){
+  return `<div class="card"><div class="row"><input type="text" id="tt" placeholder="اسم المهمة"><input type="date" id="td"><select id="tp"><option value="high">أولوية عالية</option><option value="mid" selected>متوسطة</option><option value="low">منخفضة</option></select></div>
+  <div class="row" style="margin-top:8px"><input type="text" id="ts" placeholder="خطوات صغيرة (افصلي بينهم بفاصلة)"><button class="btn" onclick="addTask()">إضافة</button></div></div>`+
+  (S.tasks.length?S.tasks.slice().sort((a,b)=>a.done-b.done||(a.due||'9').localeCompare(b.due||'9')).map(t=>{const d=days(t.due),late=!t.done&&d!==null&&d<0;
+   return `<div class="card"><div class="row"><input type="checkbox" ${t.done?'checked':''} onchange="tog('${t.id}')" aria-label="تم"><span class="${t.done?'done':''}" style="flex:1">${esc(t.title)}</span><span class="tag t-${t.pr}">${PR[t.pr]}</span><button class="x" onclick="del('tasks','${t.id}')" aria-label="حذف">×</button></div>
+   <div class="sub ${late?'late':''}">${t.due?(late?'متأخرة · ':'')+t.due:'من غير ميعاد'}</div>
+   ${t.steps.map((s,i)=>`<label class="row"><input type="checkbox" ${s.d?'checked':''} onchange="stp('${t.id}',${i})"><span class="${s.d?'done':''}">${esc(s.t)}</span></label>`).join('')}</div>`}).join(''):'<div class="empty">لسه مفيش مهام. ابدئي بأول واحدة.</div>');
+}
+function vStudy(){
+  return `<div class="card"><div class="row"><input type="text" id="sn" placeholder="المادة / المحاضرة"><select id="sd"><option value="1">سهلة</option><option value="2" selected>متوسطة</option><option value="3">صعبة</option></select><input type="number" id="sm" min="5" step="5" placeholder="دقائق" style="width:90px"><button class="btn" onclick="addStudy()">إضافة</button></div></div>`+
+  (S.study.length?S.study.map(s=>`<div class="card"><div class="row"><b style="flex:1">${esc(s.name)}</b><span class="tag t-${['','low','mid','high'][s.diff]}">${['','سهلة','متوسطة','صعبة'][s.diff]}</span>${s.min?`<span class="sub">${s.min} د</span>`:''}<button class="x" onclick="del('study','${s.id}')" aria-label="حذف">×</button></div>
+   <div class="row" style="margin:6px 0">${Object.entries(ST).map(([k,v])=>`<button class="btn ${s.st===k?'':'soft'}" onclick="setSt('${s.id}','${k}')">${v}</button>`).join('')}</div>
+   <textarea placeholder="ملخصك هنا…" onchange="sum('${s.id}',this.value)">${esc(s.sum||'')}</textarea></div>`).join(''):'<div class="empty">سجلي المواد والمحاضرات المتراكمة هنا.</div>');
+}
+function vIdeas(){
+  const f=S.ideas.filter(i=>!q||(i.t+' '+i.tags.join(' ')).includes(q));
+  return `<div class="card"><textarea id="it" placeholder="أي فكرة أو ملاحظة…"></textarea><div class="row" style="margin-top:8px"><input type="text" id="ig" placeholder="كلمات مفتاحية: دراسة، تيم، تطوع"><button class="btn" onclick="addIdea()">حفظ</button></div></div>
+  <input type="text" style="width:100%" placeholder="ابحثي في الأفكار" value="${esc(q)}" oninput="q=this.value;render(true)" id="sq">`+
+  (f.length?f.map(i=>`<div class="card"><div class="row"><span style="flex:1">${esc(i.t)}</span><button class="x" onclick="del('ideas','${i.id}')" aria-label="حذف">×</button></div>${i.tags.map(g=>`<span class="tag" onclick="q='${esc(g)}';render()">${esc(g)}</span>`).join('')}</div>`).join(''):'<div class="empty">مفيش نتائج.</div>');
+}
+function vLec(){
+  return `<div class="card"><b>ارفعي تسجيل المحاضرة</b><div class="row" style="margin-top:8px"><input type="file" accept="audio/*,video/*" id="lf"><button class="btn" onclick="lecGo()">ابدئي</button></div><div id="lres" style="margin-top:10px"></div></div>
+  <div class="note">تفريغ الصوت وتحديد المهم وتوليد الأسئلة بيحتاجوا سيرفر (Supabase Edge Function + خدمة تحويل كلام لنص + Claude API). الصفحة دي جاهزة تستقبل الناتج في خانة الملخص وبنك الأسئلة، والربط نفسه بيتعمل بعد الاستضافة.</div>
+  <h2>ألصقي تفريغ المحاضرة</h2><div class="card"><textarea id="lt" placeholder="لو عندك نص المحاضرة، الصقيه هنا واستخرجي منه الجمل اللي الدكتور ركّز عليها"></textarea><button class="btn" onclick="keys()">استخرجي الجمل المهمة</button><div id="kres"></div></div>`;
+}
+function vQuiz(){
+  if(!S.qs.length)return '<div class="empty">ضيفي أسئلة لتبدأي التدريب.</div>';
+  const x=S.qs[quizI%S.qs.length];
+  return `<div class="card"><div class="sub">سؤال ${quizI%S.qs.length+1} من ${S.qs.length}</div><p><b>${esc(x.q)}</b></p>${x.o.map((o,i)=>`<button class="opt" onclick="ans(${i},this)">${esc(o)}</button>`).join('')}<button class="btn soft" onclick="quizI++;answered=false;render()">السؤال التالي</button></div>
+  <h2>ضيفي سؤال</h2><div class="card"><input type="text" id="qq" style="width:100%" placeholder="نص السؤال"><input type="text" id="qo" style="width:100%;margin-top:6px" placeholder="الاختيارات مفصولة بفاصلة، والصح أولًا"><button class="btn" style="margin-top:8px" onclick="addQ()">حفظ السؤال</button></div>`;
+}
+/* ===== أفعال ===== */
+function addTask(){const t=$('#tt').value.trim();if(!t)return;S.tasks.push({id:uid(),title:t,due:$('#td').value,pr:$('#tp').value,done:false,steps:$('#ts').value.split(/[,،]/).map(s=>s.trim()).filter(Boolean).map(t=>({t,d:false}))});save()}
+const f=(k,id)=>S[k].find(x=>String(x.id)===String(id));
+function tog(id){const t=f('tasks',id);t.done=!t.done;save()}
+function stp(id,i){const s=f('tasks',id).steps[i];s.d=!s.d;save()}
+function del(k,id){S[k]=S[k].filter(x=>String(x.id)!==String(id));save()}
+function addStudy(){const n=$('#sn').value.trim();if(!n)return;S.study.push({id:uid(),name:n,diff:+$('#sd').value,min:+$('#sm').value||0,st:'todo',sum:''});save()}
+function setSt(id,k){f('study',id).st=k;save()}
+function sum(id,v){f('study',id).sum=v;persist()}
+function addIdea(){const t=$('#it').value.trim();if(!t)return;S.ideas.unshift({id:uid(),t,tags:$('#ig').value.split(/[,،]/).map(s=>s.trim()).filter(Boolean)});save()}
+function addQ(){const q=$('#qq').value.trim(),o=$('#qo').value.split(/[,،]/).map(s=>s.trim()).filter(Boolean);if(!q||o.length<2)return;S.qs.push({q,o,a:0});quizI=S.qs.length-1;save()}
+function ans(i,b){if(answered)return;answered=true;const x=S.qs[quizI%S.qs.length];const all=b.parentNode.querySelectorAll('.opt');all[x.a].classList.add('right');if(i!==x.a)b.classList.add('wrong')}
+function lecGo(){const f=$('#lf').files[0];$('#lres').innerHTML=f?`<span class="tag">${esc(f.name)}</span> اتحدد الملف. الخطوة الجاية: رفعه لـ Supabase Storage وتشغيل التفريغ من السيرفر.`:'<span class="late">اختاري ملف الأول.</span>'}
+function keys(){const t=$('#lt').value;const cue=/(مهم|ركزوا|هييجي|هتيجي|امتحان|لازم|انتبهوا|important|exam)/i;
+  const s=t.split(/[.\n؟?!]/).map(x=>x.trim()).filter(x=>x&&cue.test(x));
+  $('#kres').innerHTML=s.length?s.map(x=>`<div class="card">${esc(x)}</div>`).join(''):'<div class="empty">مفيش جمل فيها كلمات تركيز. جربي نص أطول.</div>'}
+function render(keep){
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.k===tab));
+  $('#main').innerHTML={day:vDay,tasks:vTasks,study:vStudy,ideas:vIdeas,lec:vLec,quiz:vQuiz}[tab]();
+  if(keep){const e=$('#sq');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}}
+}
+boot();
+</script>
+</body>
+</html>
